@@ -1,25 +1,71 @@
-resource "azurerm_network_interface" "main" {
-  name                = "${var.vm_name}-nic"
-  location            = var.location
-  resource_group_name = var.resource_group_name
+terraform {
+  required_version = ">=0.12"
 
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = var.subnet_id
-    private_ip_address_allocation = "Dynamic"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~>3.0"
+    }
   }
 }
 
-resource "azurerm_linux_virtual_machine" "main" {
-  name                = var.vm_name
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  size                = var.vm_size
-  admin_username      = var.admin_username
-  admin_password      = var.admin_password
-  network_interface_ids = [azurerm_network_interface.main.id]
-  disable_password_authentication = false
+provider "azurerm" {
+  features {}
+}
 
+# Resource Group
+resource "azurerm_resource_group" "rg" {
+  name     = var.resource_group_name
+  location = var.location
+}
+
+# Virtual Network
+resource "azurerm_virtual_network" "vnet" {
+  name                = var.vnet_name
+  address_space       = [var.address_space]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+# Subnet
+resource "azurerm_subnet" "subnet" {
+  name                 = var.subnet_name
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = [var.subnet_address_prefix]
+}
+
+# Public IP
+resource "azurerm_public_ip" "public_ip" {
+  name                = var.public_ip_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Dynamic"
+}
+
+# Network Interface
+resource "azurerm_network_interface" "nic" {
+  name                = var.nic_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "ipconfig1"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.public_ip.id
+  }
+}
+
+# Virtual Machine
+resource "azurerm_linux_virtual_machine" "vm" {
+  name                = var.vm_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  network_interface_ids = [
+    azurerm_network_interface.nic.id,
+  ]
+  size = var.vm_size
 
   os_disk {
     caching              = "ReadWrite"
@@ -27,9 +73,14 @@ resource "azurerm_linux_virtual_machine" "main" {
   }
 
   source_image_reference {
-    publisher = "Debian"
-    offer     = "debian-12"
-    sku       = "12"
-    version   = "latest"
+    publisher = var.image_publisher
+    offer     = var.image_offer
+    sku       = var.image_sku
+    version   = var.image_version
   }
+
+  admin_username = var.admin_username
+  admin_password = var.admin_password
+
+  disable_password_authentication = false
 }
