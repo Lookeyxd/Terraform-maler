@@ -1,12 +1,17 @@
+provider "azurerm" {
+  features {}
+  subscription_id = "b8023013-bccf-48f8-aa8e-c7cc2aab91cb"
+}
+
 resource "azurerm_lb" "main" {
-  name                = "db-loadbalancer"
+  name                = var.name
   location            = var.location
   resource_group_name = var.resource_group_name
   sku                 = "Standard"
 
   frontend_ip_configuration {
     name                 = "frontendConfig"
-    subnet_id            = var.subnet_id
+    #subnet_id            = var.subnet_id
   }
 }
 
